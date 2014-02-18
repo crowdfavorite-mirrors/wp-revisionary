@@ -29,6 +29,10 @@ float: left;
 margin: 0;
 }
 
+.rs-form-table th {
+padding-left: 10px;
+}
+
 .rs-form-table input {
 vertical-align: text-bottom;
 }
@@ -381,7 +385,7 @@ vertical-align: top;
 
 body.admin_page_rvy-revisions table.diff td, table.diff th {
 max-width: 400px;
-} 
+}
 
 body.admin_page_rvy-revisions #title {
     font-size: 1.7em;
@@ -391,4 +395,30 @@ body.admin_page_rvy-revisions #title {
     outline: medium none;
     padding: 3px 8px;
     width: 100%;
+}
+
+body.admin_page_rvy-revisions #commentsdiv {
+display: none;
+}
+
+table.diff {
+	width: 100%;
+}
+
+table.diff col.content {
+	width: 50%;
+}
+
+table.diff tr {
+	background-color: transparent;
+}
+
+table.diff td, table.diff th {
+	padding: .5em;
+	font-family: Consolas, Monaco, monospace;
+	border: none;
+}
+
+table.diff .diff-deletedline del, table.diff .diff-addedline ins {
+	text-decoration: none;
 }

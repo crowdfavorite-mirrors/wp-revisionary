@@ -8,7 +8,7 @@ if( basename(__FILE__) == basename($_SERVER['SCRIPT_FILENAME']) )
  * 
  *
  * @author 		Kevin Behrens
- * @copyright 	Copyright 2011
+ * @copyright 	Copyright 2011-2013
  * 
  */
 

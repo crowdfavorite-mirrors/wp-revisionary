@@ -7,7 +7,7 @@ class RevisionaryAdminHardway_Ltd {
 	// low-level filtering of otherwise unhookable queries
 	//
 	// Todo: review all queries for version-specificity; apply regular expressions to make it less brittle
-	function flt_last_resort_query($query) {
+	public static function flt_last_resort_query($query) {
 		global $wpdb;
 
 		$posts = $wpdb->posts;

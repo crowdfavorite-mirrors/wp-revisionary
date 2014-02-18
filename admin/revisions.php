@@ -13,7 +13,7 @@ if( basename(__FILE__) == basename($_SERVER['SCRIPT_FILENAME']) )
  * 
  */
 
-global $current_user; 
+global $current_user, $revisionary; 
  
 include_once( dirname(__FILE__).'/revision-ui_rvy.php' ); 
 
@@ -100,6 +100,7 @@ case 'diff' :
 	if ( $type_obj = get_post_type_object( $rvy_post->post_type ) ) {
 		$edit_cap = $type_obj->cap->edit_post;
 		$edit_others_cap = $type_obj->cap->edit_others_posts;
+		$delete_cap = $type_obj->cap->delete_post;
 	}
 		
 	if ( ! $can_fully_edit_post = agp_user_can( $edit_cap, $rvy_post->ID, '', array( 'skip_revision_allowance' => true ) ) ) {
@@ -138,8 +139,6 @@ case 'diff' :
 	break;
 case 'view' :
 default :
-	global $revisionary;
-	
 	$left = 0;
 	$right = 0;
 	$h2 = '';
@@ -159,12 +158,19 @@ default :
 		// revision_id is for a published post.  List all its revisions - either for type specified or default to past
 		if ( ! $revision_status )
 			$revision_status = 'inherit';
+
+		if ( !current_user_can( 'edit_post', $rvy_post->ID ) && ( $rvy_post->post_author != $current_user->ID ) )
+			wp_die();
+
 	} else {
 		if ( !$rvy_post = get_post( $revision->post_parent ) )
 			break;
 
 		// actual status of compared objects overrides any revision_Status arg passed in
 		$revision_status = $revision->post_status;
+
+		if ( !current_user_can( 'edit_post', $rvy_post->ID ) && ( $revision->post_author != $current_user->ID ) )
+			wp_die();
 	}
 
 	if ( $type_obj = get_post_type_object( $rvy_post->post_type ) ) {
@@ -237,7 +243,7 @@ default :
 		$post_title = "<a href='post.php?action=edit&post=$rvy_post->ID'>$rvy_post->post_title</a>";
 		
 		$revision_title = wp_post_revision_title( $revision, false );
-		$h2 = sprintf( __( '&#8220;%1$s&#8221; (Current Revision)' ), $post_title );
+		$h2 = sprintf( __( '&#8220;%1$s&#8221; (Currently Published)' ), $post_title );
 	}
 
 	add_filter( 'get_edit_post_link', array($revisionary->admin, 'flt_edit_post_link'), 10, 3 );
@@ -269,20 +275,18 @@ if ( ! $revision_status )
 <form name="post" action="" method="post" id="post">
 
 <?php
-global $current_user;
+if ( ! $can_fully_edit_post = agp_user_can( $edit_cap, $rvy_post->ID, '', array( 'skip_revision_allowance' => true ) ) ) {
+	// post-assigned Revisor role is sufficient to edit others' revisions, but post-assigned Contributor role is not
+	if ( isset( $GLOBALS['cap_interceptor'] ) )
+		$GLOBALS['cap_interceptor']->require_full_object_role = true;
+	
+	$_can_edit_others = ! rvy_get_option( 'revisor_lock_others_revisions' ) && agp_user_can( $edit_others_cap, $rvy_post->ID );
+
+	if ( isset( $GLOBALS['cap_interceptor'] ) )
+		$GLOBALS['cap_interceptor']->require_full_object_role = false;
+}
 
 if ( 'diff' != $action ) {
-	if ( ! $can_fully_edit_post = agp_user_can( $edit_cap, $rvy_post->ID, '', array( 'skip_revision_allowance' => true ) ) ) {
-		// post-assigned Revisor role is sufficient to edit others' revisions, but post-assigned Contributor role is not
-		if ( isset( $GLOBALS['cap_interceptor'] ) )
-			$GLOBALS['cap_interceptor']->require_full_object_role = true;
-		
-		$_can_edit_others = ! rvy_get_option( 'revisor_lock_others_revisions' ) && agp_user_can( $edit_others_cap, $rvy_post->ID );
-
-		if ( isset( $GLOBALS['cap_interceptor'] ) )
-			$GLOBALS['cap_interceptor']->require_full_object_role = false;
-	}
-
 	$can_edit = ( 'revision' == $revision->post_type ) && (
 		$can_fully_edit_post || 
 		( ( $revision->post_author == $current_user->ID || $_can_edit_others ) && ( 'pending' == $revision->post_status ) ) 
@@ -401,7 +405,7 @@ echo '<td class="rvy-date-selection">';
 		echo '</div>';
 		
 		?>
-		<div id="rvy_revision_edit_secondary_div" style="display:none;">
+		<div id="rvy_revision_edit_secondary_div" style="margin-bottom:1em;margin-top:1em">
 		<input name="rvy_revision_edit" type="submit" class="button-primary" id="rvy_revision_edit_secondary" tabindex="5" accesskey="p" value="<?php esc_attr_e('Update Revision', 'revisionary') ?>" />
 		</div>
 		<?php
@@ -419,7 +423,7 @@ echo '</table>';
 	
 	// title stuff
 	echo '
-	<div id="titlediv rvy-title-div">
+	<div id="titlediv" class="rvy-title-div">
 	<div id="titlewrap">
 		<label class="screen-reader-text" for="title">';
 		
@@ -449,8 +453,8 @@ echo '</table>';
 	
 	echo '</div>';
 	
-    do_action( 'rvy-revisions_sidebar' );
-
+	do_action( 'rvy-revisions_sidebar' );
+	
 	if ( $can_edit ) {
 ?>
 <br />
@@ -475,49 +479,59 @@ echo '</table>';
 <div class="ie-fixed">
 <?php if ( 'diff' == $action ) : ?>
 <?php
-if ( strtotime($left_revision->post_modified) > strtotime($right_revision->post_modified) ) {
+$left_status_obj = get_post_status_object( $left_revision->post_status );
+$right_status_obj = get_post_status_object( $right_revision->post_status );
+
+// if only one of the revisions is past, force it to left
+if ( $right_status_obj && ( $right_status_obj->name == 'inherit' ) && $left_status_obj && ( $right_status_obj->name != 'inherit' ) ) {
+	$temp = $right_revision;
+	$right_revision = $left_revision;
+	$left_revision = $temp;
+	
+// if one of the comparison revisions is published, force it to left (unless left revision is past)
+} elseif( $left_status_obj && ( $left_status_obj->name != 'inherit' ) && $right_status_obj && ( $right_status_obj->public || $right_status_obj->private || $left_status_obj->public || $left_status_obj->private ) ) {
+	if ( $right_status_obj && ( $right_status_obj->public || $right_status_obj->private ) ) {
+		$temp = $right_revision;
+		$right_revision = $left_revision;
+		$left_revision = $temp;
+	}
+	// note: if left revision is published, it will be displayed there regardless of modification dates
+
+// otherwise, force most recently modified revision to the right
+} elseif ( strtotime($left_revision->post_modified) > strtotime($right_revision->post_modified) ) {
 	$temp = $left_revision;
 	$left_revision = $right_revision;
 	$right_revision = $temp;
 }
 
-$title_left = sprintf( __('Older: modified %s', 'revisionary'), RevisionaryAdmin::convert_link( rvy_post_revision_title( $left_revision, true, 'post_modified' ), 'revision', 'manage' ) );
+do_action( 'rvy_diff_display', $left_revision, $right_revision, $rvy_post );
 
-$title_right = sprintf( __('Newer: modified %s', 'revisionary'), RevisionaryAdmin::convert_link( rvy_post_revision_title( $right_revision, true, 'post_modified' ), 'revision', 'manage' ) );
+$title_left = sprintf( __('Older: modified %s', 'revisionary'), $revisionary->admin->convert_link( rvy_post_revision_title( $left_revision, true, 'post_modified' ), 'revision', 'manage' ) );
 
+$title_right = sprintf( __('Newer: modified %s', 'revisionary'), $revisionary->admin->convert_link( rvy_post_revision_title( $right_revision, true, 'post_modified' ), 'revision', 'manage' ) );
+
+$compare_fields = apply_filters( 'rvy_diff_fields', _wp_post_revision_fields(), $rvy_post );
 
 $identical = true;
-foreach ( _wp_post_revision_fields() as $field => $field_title ) :
+foreach ( $compare_fields as $field => $field_title ) :
 	if ( ( 'post_content' == $field ) && ( ! $action || ( 'view' == $action ) ) )
 		continue;
-		
-	if ( 'diff' == $action ) {
-		$left_content = apply_filters( "_wp_post_revision_field_$field", $left_revision->$field, $field );
-		$right_content = apply_filters( "_wp_post_revision_field_$field", $right_revision->$field, $field );
-		
-		if ( rvy_get_option('diff_display_strip_tags') ) {
-			$left_content = strip_tags($left_content);
-			$right_content = strip_tags($right_content);
-		}
-		
-		if ( !$content = wp_text_diff( $left_content, $right_content, array( 'title_left' => $title_left, 'title_right' => $title_right ) ) )
-			continue; // There is no difference between left and right
-		$identical = false;
-	} elseif ( $revision ) {
-		if ( $revision && ( 'post_title' == $field ) ) {
-			if ( 'revision' != $revision->post_type )	// no need to redisplay title
-				continue;
-			
-			if ( $revision->post_title == $rvy_post->post_title )
-				continue;
-		}
-		
-		$content = apply_filters( "_wp_post_revision_field_$field", $revision->$field, $field );
+	
+	$left_content = maybe_serialize( apply_filters( "_wp_post_revision_field_$field", $left_revision->$field, $field ) );
+	$right_content = maybe_serialize( apply_filters( "_wp_post_revision_field_$field", $right_revision->$field, $field ) );
+	
+	if ( rvy_get_option('diff_display_strip_tags') ) {
+		$left_content = strip_tags($left_content);
+		$right_content = strip_tags($right_content);
 	}
+	
+	if ( !$content = rvy_text_diff( $left_content, $right_content, array( 'title_left' => $title_left, 'title_right' => $title_right ) ) )
+		continue; // There is no difference between left and right
+	$identical = false;
 	
 	if ( ! empty($content) ) :?>
 	<div id="revision-field-<?php echo $field; ?>">
-		<p class="rvy-revision-field"><strong>
+		<p class="rvy-revision-field clear"><strong>
 		<?php 
 		echo esc_html( $field_title ); 
 		?>
@@ -589,9 +603,8 @@ foreach ( array_keys($revision_status_captions) as $_revision_status ) {
 $status_links .= '</ul>';
 
 echo $status_links;
-	
-$current_id = ( isset($revision_id) ) ? $revision_id : 0;
-$args = array( 'format' => 'form-table', 'parent' => true, 'right' => $right, 'left' => $left, 'current_id' => $current_id );
+
+$args = array( 'format' => 'form-table', 'parent' => true, 'right' => $right, 'left' => $left, 'current_id' => isset($revision_id) ? $revision_id : 0 );
 
 $count = rvy_list_post_revisions( $rvy_post, $revision_status, $args );
 if ( $count < 2 ) {
@@ -603,3 +616,75 @@ if ( $count < 2 ) {
 ?>
 
 </div>
+
+<?php
+// WP 3.6 changed diff table format.  For now, just port text diff code from WP 3.5.
+
+/**
+ * Displays a human readable HTML representation of the difference between two strings.
+ *
+ * The Diff is available for getting the changes between versions. The output is
+ * HTML, so the primary use is for displaying the changes. If the two strings
+ * are equivalent, then an empty string will be returned.
+ *
+ * The arguments supported and can be changed are listed below.
+ *
+ * 'title' : Default is an empty string. Titles the diff in a manner compatible
+ *		with the output.
+ * 'title_left' : Default is an empty string. Change the HTML to the left of the
+ *		title.
+ * 'title_right' : Default is an empty string. Change the HTML to the right of
+ *		the title.
+ *
+ * @since 2.6
+ * @see wp_parse_args() Used to change defaults to user defined settings.
+ * @uses Text_Diff
+ * @uses WP_Text_Diff_Renderer_Table
+ *
+ * @param string $left_string "old" (left) version of string
+ * @param string $right_string "new" (right) version of string
+ * @param string|array $args Optional. Change 'title', 'title_left', and 'title_right' defaults.
+ * @return string Empty string if strings are equivalent or HTML with differences.
+ */
+function rvy_text_diff( $left_string, $right_string, $args = null ) {
+	$defaults = array( 'title' => '', 'title_left' => '', 'title_right' => '' );
+	$args = wp_parse_args( $args, $defaults );
+
+	if ( !class_exists( 'WP_Text_Diff_Renderer_Table' ) )
+		require( dirname(__FILE__) . '/includes/wp-diff.php' );
+
+	$left_string  = normalize_whitespace($left_string);
+	$right_string = normalize_whitespace($right_string);
+
+	$left_lines  = explode("\n", $left_string);
+	$right_lines = explode("\n", $right_string);
+
+	$text_diff = new Text_Diff($left_lines, $right_lines);
+	$renderer  = new WP_Text_Diff_Renderer_Table();
+	$diff = $renderer->render($text_diff);
+
+	if ( !$diff )
+		return '';
+
+	$r  = "<table class='diff'>\n";
+	$r .= "<col class='ltype' /><col class='content' /><col class='ltype' /><col class='content' />";
+
+	if ( $args['title'] || $args['title_left'] || $args['title_right'] )
+		$r .= "<thead>";
+	if ( $args['title'] )
+		$r .= "<tr class='diff-title'><th colspan='4'>$args[title]</th></tr>\n";
+	if ( $args['title_left'] || $args['title_right'] ) {
+		$r .= "<tr class='diff-sub-title'>\n";
+		$r .= "\t<td></td><th>$args[title_left]</th>\n";
+		$r .= "\t<td></td><th>$args[title_right]</th>\n";
+		$r .= "</tr>\n";
+	}
+	if ( $args['title'] || $args['title_left'] || $args['title_right'] )
+		$r .= "</thead>\n";
+
+	$r .= "<tbody>\n$diff\n</tbody>\n";
+	$r .= "</table>";
+
+	return $r;
+}
+?>

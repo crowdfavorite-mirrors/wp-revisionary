@@ -23,7 +23,6 @@ if( false !== strpos( urldecode($_SERVER['REQUEST_URI']), 'admin.php?page=rvy-re
 	add_filter( 'mce_external_plugins', 'rvy_clear_mce_plugins', 99 );
 }
  
- 
 function rvy_metabox_notification_list( $topic ) {
 	if ( 'pending_revision' == $topic ) {	
 		global $revisionary;
@@ -45,61 +44,72 @@ function rvy_metabox_notification_list( $topic ) {
 		
 		$type_obj = get_post_type_object( $object_type );
 		
-		if ( defined('RVY_CONTENT_ROLES') && ! defined('SCOPER_DEFAULT_MONITOR_GROUPS') ) {
-			if ( $publisher_ids = $revisionary->content_roles->get_metagroup_members( 'Pending Revision Monitors' ) ) {
-				if ( $type_obj ) {
-					$revisionary->skip_revision_allowance = true;
-					$post_publishers = $revisionary->content_roles->users_who_can( $type_obj->cap->edit_post, $object_id, array( 'cols' => '*', 'force_refresh' => true, 'user_ids' => $publisher_ids ) );
-					$revisionary->skip_revision_allowance = false;
-					
-					$can_publish_post = array();
-					foreach ( $post_publishers as $key => $user ) {
-						$can_publish_post []= $user->ID;
-						
-						if ( ! in_array( $user->ID, $publisher_ids ) )
-							unset(  $post_publishers[$key] );
-					}
-					
-					$publisher_ids = array_intersect( $publisher_ids, $can_publish_post );
-					$publisher_ids = array_fill_keys( $publisher_ids, true );
-				}
-			}
-		} else {
-			// If RS is not active, default to sending to all Administrators and Editors who can publish the post
-			require_once(ABSPATH . 'wp-admin/includes/user.php');
-			
-			$use_wp_roles = ( defined( 'SCOPER_MONITOR_ROLES' ) ) ? SCOPER_MONITOR_ROLES : 'administrator,editor';
-			
-			$use_wp_roles = str_replace( ' ', '', $use_wp_roles );
-			$use_wp_roles = explode( ',', $use_wp_roles );
-			
-			$recipients = array();
-			
-			foreach ( $use_wp_roles as $role_name ) {
-				if ( awp_ver( '3.1-beta' ) ) {
-					$search = new WP_User_Query( "search=&role=$role_name" );
-					$recipients = array_merge( $recipients, $search->results );
-				} else {
-					$search = new WP_User_Search( '', 0, $role_name );
-					$found_ids = $search->results;
-					
-					foreach ( $found_ids as $userid ) {
-						$recipients []= new WP_User($userid);
-					}
-				}
-			}
-			
-			foreach ( $recipients as $_user ) {	
-				$reqd_caps = map_meta_cap( $type_obj->cap->edit_post, $_user->ID, $object_id );
-
-				if ( ! array_diff( $reqd_caps, array_keys( array_intersect( $_user->allcaps, array( true, 1, '1' ) ) ) ) ) {
-					$post_publishers []= $_user;
-					$publisher_ids [$_user->ID] = true;
-				}
-			}
-		}
-
 		if ( '1' === $notify_editors ) {
+			if ( defined('RVY_CONTENT_ROLES') && ! defined('SCOPER_DEFAULT_MONITOR_GROUPS') ) {
+				global $revisionary;
+				
+				$monitor_groups_enabled = true;
+				$revisionary->content_roles->ensure_init();
+				
+				if ( $publisher_ids = $revisionary->content_roles->get_metagroup_members( 'Pending Revision Monitors' ) ) {
+					if ( $type_obj ) {
+						$revisionary->skip_revision_allowance = true;
+						$cols = ( defined('COLS_ALL_RS') ) ? COLS_ALL_RS : 'all';
+						$post_publishers = $revisionary->content_roles->users_who_can( $type_obj->cap->edit_post, $object_id, array( 'cols' => $cols, 'force_refresh' => true, 'user_ids' => $publisher_ids ) );
+						$revisionary->skip_revision_allowance = false;
+						
+						$can_publish_post = array();
+						foreach ( $post_publishers as $key => $user ) {
+							$can_publish_post []= $user->ID;
+							
+							if ( ! in_array( $user->ID, $publisher_ids ) )
+								unset(  $post_publishers[$key] );
+						}
+						
+						$publisher_ids = array_intersect( $publisher_ids, $can_publish_post );
+						$publisher_ids = array_fill_keys( $publisher_ids, true );
+					}
+				}
+			}
+			
+			if ( ! $publisher_ids && ( empty($monitor_groups_enabled) || ! defined('RVY_FORCE_MONITOR_GROUPS') ) ) {
+				// If RS is not active, default to sending to all Administrators and Editors who can publish the post
+				require_once(ABSPATH . 'wp-admin/includes/user.php');
+				
+				if ( defined( 'SCOPER_MONITOR_ROLES' ) )
+					$use_wp_roles = SCOPER_MONITOR_ROLES;
+				else
+					$use_wp_roles = ( defined( 'RVY_MONITOR_ROLES' ) ) ? RVY_MONITOR_ROLES : 'administrator,editor';
+				
+				$use_wp_roles = str_replace( ' ', '', $use_wp_roles );
+				$use_wp_roles = explode( ',', $use_wp_roles );
+				
+				$recipients = array();
+				
+				foreach ( $use_wp_roles as $role_name ) {
+					if ( awp_ver( '3.1-beta' ) ) {
+						$search = new WP_User_Query( "search=&role=$role_name" );
+						$recipients = array_merge( $recipients, $search->results );
+					} else {
+						$search = new WP_User_Search( '', 0, $role_name );
+						$found_ids = $search->results;
+						
+						foreach ( $found_ids as $userid ) {
+							$recipients []= new WP_User($userid);
+						}
+					}
+				}
+				
+				foreach ( $recipients as $_user ) {	
+					$reqd_caps = map_meta_cap( $type_obj->cap->edit_post, $_user->ID, $object_id );
+
+					if ( ! array_diff( $reqd_caps, array_keys( array_intersect( $_user->allcaps, array( true, 1, '1' ) ) ) ) ) {
+						$post_publishers []= $_user;
+						$publisher_ids [$_user->ID] = true;
+					}
+				}
+			}
+
 			$default_ids = $publisher_ids;
 		}
 		
@@ -109,7 +119,8 @@ function rvy_metabox_notification_list( $topic ) {
 			if ( empty( $default_ids[$post->post_author] ) ) {
 				if ( defined('RVY_CONTENT_ROLES') ) {
 					$revisionary->skip_revision_allowance = true;
-					$author_notify = (bool) $revisionary->content_roles->users_who_can( 'edit_post', $object_id, array( 'cols' => '*', 'force_refresh' => true, 'user_ids' => (array) $post->post_author ) );
+					$cols = ( defined('COLS_ALL_RS') ) ? COLS_ALL_RS : 'all';
+					$author_notify = (bool) $revisionary->content_roles->users_who_can( 'edit_post', $object_id, array( 'cols' => $cols, 'force_refresh' => true, 'user_ids' => (array) $post->post_author ) );
 					$revisionary->skip_revision_allowance = false;
 				} else {
 					$_user = new WP_User($post->post_author);
@@ -276,8 +287,10 @@ function rvy_post_revision_title( $revision, $link = true, $date_field = 'post_d
 		$date = "<a href='$link'>$date</a>";
 	}
 
-	if ( 'revision' != $revision->post_type ) {
-		$currentf  = __( '%1$s (Current Revision)', 'revisionary' );
+	$status_obj = get_post_status_object( $revision->post_status );
+	
+	if ( $status_obj && ( $status_obj->public || $status_obj->private ) ) {
+		$currentf  = __( '%1$s (Currently Published)', 'revisionary' );
 		$date = sprintf( $currentf, $date );
 		
 	} elseif ( "{$revision->post_parent}-autosave" === $revision->post_name ) {
@@ -337,7 +350,7 @@ function rvy_list_post_revisions( $post_id = 0, $status = '', $args = null ) {
 			$sort_field = $date_field;	
 	}
 			
-	global $current_user;
+	global $current_user, $revisionary;
 	
 	switch ( $type ) {
 	case 'autosave' :
@@ -378,8 +391,7 @@ function rvy_list_post_revisions( $post_id = 0, $status = '', $args = null ) {
 	
 	// TODO: should this buffer listed revision IDs instead of post ID ?
 	if ( defined('RVY_CONTENT_ROLES') ) {
-		//foreach( $revisions as $revision )
-			$GLOBALS['revisionary']->content_roles->add_listed_ids( 'post', $post->post_type, $post->ID );
+		$revisionary->content_roles->add_listed_ids( 'post', $post->post_type, $post->ID );
 	}
 	
 	foreach ( $revisions as $revision ) {
@@ -427,18 +439,18 @@ function rvy_list_post_revisions( $post_id = 0, $status = '', $args = null ) {
 			$datef = __awp( 'M j, Y @ G:i' );
 			
 			if ( $post->ID != $revision->ID ) {
-				$preview_link = "<a href='" .  site_url("?p={$revision->ID}&amp;post_type=revision&amp;preview=1") . "'>" . __awp( 'Preview' ) . '</a>';
-
+				$preview_link = '<a href="' . esc_url( add_query_arg( 'preview', '1', get_permalink( $revision->ID ) . '&post_type=revision' ) ) . '" title="' . esc_attr( sprintf( __( 'Preview &#8220;%s&#8221;' ), $revision->post_title ) ) . '" rel="permalink">' . __( 'Preview' ) . '</a>';
+				
 				if ( $can_edit_post 
 				|| ( ( 'pending' == $status ) && ( $revision->post_author == $current_user->ID ) )	// allow submitters to delete their own still-pending revisions
 				 ) {
 					if ( 'future' == $status ) {
 						$link = "admin.php?page=rvy-revisions&amp;action=unschedule&amp;revision={$revision->ID}";
-						$actions .= '<a href="' . wp_nonce_url( $link, 'unschedule-revision_' . $revision->ID ) . '">' . __('Unschedule') . '</a>&nbsp;|&nbsp;';
+						$actions .= '<a href="' . wp_nonce_url( $link, 'unschedule-revision_' . $revision->ID ) . '" class="rvy-unschedule">' . __('Unschedule') . '</a>&nbsp;|&nbsp;';
 					}
-				
+					
 					$link = "admin.php?page=rvy-revisions&amp;action=delete&amp;revision={$revision->ID}";
-					$actions .= '<a href="' . wp_nonce_url( $link, 'delete-revision_' . $revision->ID ) . '" onclick="' . $js_delete_call . '" >' . __awp('Delete') . '</a>';
+					$actions .= '<a href="' . wp_nonce_url( $link, 'delete-revision_' . $revision->ID ) . '" class="rvy-delete" onclick="' . $js_delete_call . '" >' . __awp('Delete') . '</a>';
 				}
 				
 				if ( ( strtotime($revision->post_date_gmt) > agp_time_gmt() ) && ( 'inherit' != $revision->post_status ) )
@@ -448,6 +460,7 @@ function rvy_list_post_revisions( $post_id = 0, $status = '', $args = null ) {
 					
 			} else {
 				$preview_link = '<a href="' . site_url("?p={$revision->ID}&amp;mark_current_revision=1") . '" target="_blank">' . __awp( 'Preview' ) . '</a>';
+				//$preview_link = '<a href="' . get_permalink( $revision->ID ) . '?mark_current_revision=1" target="_blank">' . __awp( 'Preview' ) . '</a>';
 				
 				// wp_post_revision_title() returns edit post link for current rev.  Convert it to a revisions.php link for viewing here like the rest
 				if ( $post->ID == $revision->ID ) {
@@ -456,7 +469,7 @@ function rvy_list_post_revisions( $post_id = 0, $status = '', $args = null ) {
 					$date = str_replace( 'post=', 'revision=', $date );
 					$date = str_replace( '?&amp;', '?', $date );
 					$date = str_replace( '?&', '?', $date );
-					$date = RevisionaryAdmin::convert_link( $date, 'revision', 'manage', array( 'object_type' => $post->post_type ) );
+					$date = $revisionary->admin->convert_link( $date, 'revision', 'manage', array( 'object_type' => $post->post_type ) );
 
 					$date = str_replace( '&revision=', "&amp;revision_status=$status&amp;revision=", $date );
 					$date = str_replace( '&amp;revision=', "&amp;revision_status=$status&amp;revision=", $date );

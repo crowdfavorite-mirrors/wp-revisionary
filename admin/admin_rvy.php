@@ -29,12 +29,11 @@ class RevisionaryAdmin
 		add_action('admin_head', array(&$this, 'admin_head'));
 		
 		if ( ! defined('XMLRPC_REQUEST') && ! strpos($_SERVER['SCRIPT_NAME'], 'p-admin/async-upload.php' ) ) {
-			// New Network menu with WP 3.1
 			if ( RVY_NETWORK ) {
 				require_once( dirname(__FILE__).'/admin_lib-mu_rvy.php' );
 				add_action('network_admin_menu', 'rvy_mu_site_menu' );
 			}
-				
+			
 			add_action('admin_menu', array(&$this,'build_menu'));
 			
 			if ( strpos($_SERVER['SCRIPT_NAME'], 'p-admin/plugins.php') )
@@ -47,13 +46,13 @@ class RevisionaryAdmin
 		add_action('admin_head', array(&$this, 'add_editor_ui') );
 		add_action('admin_head', array(&$this, 'act_hide_admin_divs') );
 		
-		require_once( dirname(__FILE__).'/admin-dashboard_rvy.php' );	
+		if ( ! ( defined( 'SCOPER_VERSION' ) || defined( 'PP_VERSION' ) || defined( 'PPC_VERSION' ) ) || defined( 'USE_RVY_RIGHTNOW' ) )
+			require_once( 'admin-dashboard_rvy.php' );
 		
 		// log this action so we know when to ignore the save_post action
 		add_action('inherit_revision', array(&$this, 'act_log_revision_save') );
 
 		add_action('pre_post_type', array(&$this, 'flt_detect_revision_save') );
-		
 	
 		if ( rvy_get_option( 'pending_revisions' ) ) {
 			if ( strpos( $_SERVER['SCRIPT_NAME'], 'p-admin/edit.php') 
@@ -81,7 +80,6 @@ class RevisionaryAdmin
 			add_filter( 'wp_insert_post_data', array(&$this, 'flt_insert_post_data'), 99, 2 );
 			add_action('pre_post_update', array(&$this, 'act_create_scheduled_rev'), 3 );  // other filters will have a chance to apply at actual publish time
 		}
-		
 
 		$script_name = $_SERVER['SCRIPT_NAME'];
 		
@@ -107,7 +105,7 @@ class RevisionaryAdmin
 			}
 		}
 		
-		if ( strpos( $_SERVER['REQUEST_URI'], 'edit.php' ) || strpos( $_SERVER['REQUEST_URI'], 'edit-pages.php' ) )
+		if ( strpos( $_SERVER['REQUEST_URI'], 'edit.php' ) )
 			add_filter( 'get_post_time', array(&$this, 'flt_get_post_time'), 10, 3 );
 
 		add_action( 'post_submitbox_start', array( &$this, 'pending_rev_checkbox' ) );
@@ -117,7 +115,7 @@ class RevisionaryAdmin
 	function add_preview_action( $actions, $post ) {
 		if ( 'revision' == $post->post_type ) {
 			if ( current_user_can( 'edit_post', $post->ID ) )
-				$actions['view'] = $actions['view'] = '<a href="' . esc_url( add_query_arg( 'preview', 'true', get_permalink( $post->ID ) . '&post_type=revision&preview=1' ) ) . '" title="' . esc_attr( sprintf( __( 'Preview &#8220;%s&#8221;' ), $post->post_title ) ) . '" rel="permalink">' . __( 'Preview' ) . '</a>';
+				$actions['view'] = $actions['view'] = '<a href="' . esc_url( add_query_arg( 'preview', '1', get_permalink( $post->ID ) . '&post_type=revision' ) ) . '" title="' . esc_attr( sprintf( __( 'Preview &#8220;%s&#8221;' ), $post->post_title ) ) . '" rel="permalink">' . __( 'Preview' ) . '</a>';
 		}
 		
 		return $actions;
@@ -183,7 +181,7 @@ class RevisionaryAdmin
 
 		$status_obj = get_post_status_object( $post->post_status );
 		
-		if ( ! $status_obj || ( ! $status_obj->public && ! $status_obj->private ) )
+		if ( ! $status_obj || ( ! $status_obj->public && ! $status_obj->private && ( 'future' != $post->post_status ) ) )
 			return;
 
 		if ( $type_obj = get_post_type_object( $post->post_type ) ) {
@@ -247,7 +245,7 @@ class RevisionaryAdmin
 			echo '<link rel="stylesheet" href="' . RVY_URLPATH . '/admin/about/about.css" type="text/css" />'."\n";
 
 		add_filter( 'contextual_help_list', array(&$this, 'flt_contextual_help_list'), 10, 2 );
-			
+		
 		global $pagenow;
 
 		if ( in_array( $pagenow, array( 'post.php', 'post-new.php' ) ) && ! defined('RVY_PREVENT_PUBHIST_CAPTION') )
@@ -270,8 +268,8 @@ class RevisionaryAdmin
 			wp_enqueue_script( 'rvy_edit', RVY_URLPATH . "/admin/revision-edit.js", array('jquery'), RVY_VERSION, true );
 			
 			if ( ( empty( $_GET['action'] ) || in_array( $_GET['action'], array( 'view', 'edit' ) ) ) && ! empty( $_GET['revision'] ) ) {
-				if ( $revision =& get_post( $_GET['revision'] ) ) {
-					if ( ( 'revision' != $revision->post_type ) || $post =& get_post( $revision->post_parent ) ) {
+				if ( $revision = get_post( $_GET['revision'] ) ) {
+					if ( ( 'revision' != $revision->post_type ) || $post = get_post( $revision->post_parent ) ) {
 				
 						// determine if tinymce textarea should be editable for displayed revision
 						global $current_user;
@@ -357,7 +355,7 @@ jQuery(document).ready( function($) {
 		return $help;
 	}
 	
-	
+
 	function build_menu() {
 		if ( strpos( $_SERVER['REQUEST_URI'], 'wp-admin/network/' ) )
 			return;
@@ -366,9 +364,6 @@ jQuery(document).ready( function($) {
 
 		// For Revisions Manager access, satisfy WordPress' demand that all admin links be properly defined in menu
 		if ( false !== strpos( urldecode($_SERVER['REQUEST_URI']), 'admin.php?page=rvy-revisions' ) ) {
-			//add_options_page( __('Revisions', 'revisionary'), __('Revisions', 'revisionary'), 'read', 'rvy-revisions');
-			//add_action( 'settings_page_rvy-revisions' , $func );
-			
 			$func_content = "include_once('$path/admin/revisions.php');";
 			$func = create_function( '', $func_content );
 			
@@ -484,7 +479,7 @@ jQuery(document).ready( function($) {
 		if ( 'revision' == $topic ) {
 			if ( 'manage' == $operation ) {
 				if ( strpos( $link, 'revision.php' ) ) {
-					$link = str_replace( 'revision.php', 'admin.php?page=rvy-revisions', $link );
+					$link = str_replace( 'revision.php', 'admin.php?page=rvy-revisions&action=view', $link );
 					$link = str_replace( '?revision=', "&amp;revision=", $link );
 				}
 			
@@ -522,9 +517,9 @@ jQuery(document).ready( function($) {
     }
 	
 	function flt_edit_post_link( $link, $id, $context ) {
-		if ( $post = &get_post( $id ) )
+		if ( $post = get_post( $id ) )
 			if ( 'revision' == $post->post_type ) {
-				$link = RevisionaryAdmin::convert_link( $link, 'revision', 'manage' );
+				$link = $this->convert_link( $link, 'revision', 'manage' );
 			
 				global $rvy_any_listed_revisions;
 				
@@ -538,7 +533,7 @@ jQuery(document).ready( function($) {
 	
 	function flt_preview_post_link( $link, $post ) {
 		if ( 'revision' == $post->post_type )
-			$link = RevisionaryAdmin::convert_link( $link, 'revision', 'preview' );
+			$link = $this->convert_link( $link, 'revision', 'preview' );
 
 		return $link;
 	}
@@ -546,9 +541,9 @@ jQuery(document).ready( function($) {
 	
 	function flt_post_title ( $title, $id = '' ) {
 		if ( $id )
-			if ( $post =& get_post( $id ) )
+			if ( $post = get_post( $id ) )
 				if ( 'revision' == $post->post_type )
-					$title = sprintf( __( '%s (revision)', 'revisionary' ), $post->post_title );
+					$title = sprintf( __( '%s (revision)', 'revisionary' ), $title );
 
 		return $title;
 	}
@@ -569,222 +564,191 @@ jQuery(document).ready( function($) {
 		return $time;
 	}
 	
-	
-	// If Scheduled Revisions are enabled, don't allow WP to force current post status to future based on publish date
-	function flt_insert_post_data( $data, $postarr ) {
-		if ( ( 'future' == $data['post_status'] ) && ( 'publish' == $postarr['post_status'] ) ) {
-			// don't interfere with scheduling of unpublished drafts
-			if ( in_array( $_POST['original_post_status'], array( 'publish', 'private' ) )  || in_array( $_POST['hidden_post_status'], array( 'publish', 'private' ) ) )
-				$data['post_status'] = 'publish';
-		}
-		
-		return $data;
-	}
-	
-	
-	function flt_pendingrev_post_status($status) {
-		if ( empty( $_POST['post_ID'] ) )
-			return $status;
-
-		// Make sure the stored post is published / scheduled		
-		// With Events Manager plugin active, Role Scoper 1.3 to 1.3.12 caused this filter to fire prematurely as part of object_id detection, flagging for pending_rev needlessly on update of an unpublished post
-		if ( $stored_post = get_post( $_POST['post_ID'] ) )
-			$status_obj = get_post_status_object( $stored_post->post_status );
-
-		if ( empty($status_obj) || ( ! $status_obj->public && ! $status_obj->private && ( 'future' != $stored_post->post_status ) ) )
-			return $status;
-		
-		if ( ! empty( $_POST['rvy_save_as_pending_rev'] ) && ! empty($_POST['post_ID']) ) {
-			$this->impose_pending_rev = $_POST['post_ID'];
-		}
-		
-		if ( is_content_administrator_rvy() )
-			return $status;
-		
-		if ( isset($_POST['wp-preview']) && ( 'dopreview' == $_POST['wp-preview'] ) )
-			return $status;
-			
-		if ( isset($_POST['post_ID']) && isset($_POST['post_type']) ) {
-			$post_id = $_POST['post_ID'];
-
-			if ( $type_obj = get_post_type_object( $_POST['post_type'] ) ) {
-				if ( ! agp_user_can( $type_obj->cap->edit_post, $post_id, '', array( 'skip_revision_allowance' => true ) ) )
-					$this->impose_pending_rev = $post_id;
-			}
-		}
-		
-		return $status;
-	}
-	
-	
 	function act_impose_pending_rev() {
 		if ( isset($_POST['wp-preview']) && ( 'dopreview' == $_POST['wp-preview'] ) )
 			return;
 
-		if ( ! empty($this->impose_pending_rev) ) {
-			global $revisionary;
+		if ( empty($this->impose_pending_rev) ) {
+			return;
+		}
 			
-			// todo: can we just return instead?
-			if ( isset($_POST['action']) && ( 'autosave' == $_POST['action'] ) )
-				wp_die( 'Autosave disabled when editing a published post/page to create a pending revision.' );
-			
-			$object_id = $this->impose_pending_rev;
-			$post_arr = $_POST;
-			
-			$object_type = isset($post_arr['post_type']) ? $post_arr['post_type'] : '';
+		if ( false !== strpos( urldecode($_SERVER['REQUEST_URI']), 'admin.php?page=rvy-revisions' ) )
+			return;
 		
-			$post_arr['post_type'] = 'revision';
-			$post_arr['post_status'] = 'pending';
-			$post_arr['post_parent'] = $this->impose_pending_rev;  // side effect: don't need to filter page parent selection because parent is set to published revision
-			$post_arr['parent_id'] = $this->impose_pending_rev;
-			$post_arr['post_ID'] = 0;
-			$post_arr['ID'] = 0;
-			$post_arr['guid'] = '';
-			
-			$published_post = get_post( $object_id );
-			
-			if ( defined('RVY_CONTENT_ROLES') ) {
-				if ( isset($post_arr['post_category']) ) {	// todo: also filter other post taxonomies
-					$post_arr['post_category'] = $GLOBALS['revisionary']->content_roles->filter_object_terms( $post_arr['post_category'], 'category' );
-				}
+		// todo: can we just return instead?
+		if ( isset($_POST['action']) && ( 'autosave' == $_POST['action'] ) )
+			wp_die( 'Autosave disabled when editing a published post/page to create a pending revision.' );
+		global $revisionary;
+		
+		$published_post = get_post( $this->impose_pending_rev );
+		
+		$post_arr = $_POST;
+		
+		$object_type = isset($post_arr['post_type']) ? $post_arr['post_type'] : '';
+	
+		$post_arr['post_type'] = 'revision';
+		$post_arr['post_status'] = 'pending';
+		$post_arr['post_parent'] = $this->impose_pending_rev;  // side effect: don't need to filter page parent selection because parent is set to published revision
+		$post_arr['parent_id'] = $this->impose_pending_rev;
+		$post_arr['post_ID'] = 0;
+		$post_arr['ID'] = 0;
+		$post_arr['guid'] = '';
+
+		
+		
+		if ( defined('RVY_CONTENT_ROLES') ) {
+			if ( isset($post_arr['post_category']) ) {	// todo: also filter other post taxonomies
+				$post_arr['post_category'] = $revisionary->content_roles->filter_object_terms( $post_arr['post_category'], 'category' );
 			}
-					
-			global $current_user, $wpdb;
-			$post_arr['post_author'] = $current_user->ID;		// store current user as revision author (but will retain current post_author on restoration)
-				
-			$post_arr['post_modified'] = current_time( 'mysql' );
-			$post_arr['post_modified_gmt'] = current_time( 'mysql', 1 );
+		}
 
-			$date_clause = ", post_modified = '" . current_time( 'mysql' ) . "', post_modified_gmt = '" . current_time( 'mysql', 1 ) . "'";  // make sure actual modification time is stored to revision
+		global $current_user, $wpdb;
+		$post_arr['post_author'] = $current_user->ID;		// store current user as revision author (but will retain current post_author on restoration)
 			
-			if ( $revision_id = wp_insert_post($post_arr) ) {
-				$future_date = ( ! empty($post_arr['post_date']) && ( strtotime($post_arr['post_date_gmt'] ) > agp_time_gmt() ) );
-				
-				$wpdb->query("UPDATE $wpdb->posts SET post_status = 'pending', post_parent = '$this->impose_pending_rev' $date_clause WHERE ID = '$revision_id'");
+		$post_arr['post_modified'] = current_time( 'mysql' );
+		$post_arr['post_modified_gmt'] = current_time( 'mysql', 1 );
 
-				$manage_link = $this->get_manage_link( $object_type );
-								
-				if ( $future_date )
-					$msg = __('Your modification has been saved for editorial review.  If approved, it will be published on the date you specified.', 'revisionary') . ' ';
-				else
-					$msg = __('Your modification has been saved for editorial review.', 'revisionary') . ' ';
-				
-				$msg .= '<ul><li>';
-				$msg .= sprintf( '<a href="%s">' . __('View it in Revisions Manager', 'revisionary') . '</a>', "admin.php?page=rvy-revisions&amp;revision=$revision_id&amp;action=view" );
+		$date_clause = ", post_modified = '" . current_time( 'mysql' ) . "', post_modified_gmt = '" . current_time( 'mysql', 1 ) . "'";  // make sure actual modification time is stored to revision
+		
+		if ( $revision_id = wp_insert_post($post_arr) ) {
+			$future_date = ( ! empty($post_arr['post_date']) && ( strtotime($post_arr['post_date_gmt'] ) > agp_time_gmt() ) );
+			
+			$wpdb->query("UPDATE $wpdb->posts SET post_status = 'pending', post_parent = '$this->impose_pending_rev' $date_clause WHERE ID = '$revision_id'");
+
+			$manage_link = $this->get_manage_link( $object_type );
+							
+			if ( $future_date )
+				$msg = __('Your modification has been saved for editorial review.  If approved, it will be published on the date you specified.', 'revisionary') . ' ';
+			else
+				$msg = __('Your modification has been saved for editorial review.', 'revisionary') . ' ';
+			
+			$msg .= '<ul><li>';
+			$msg .= sprintf( '<a href="%s">' . __('View it in Revisions Manager', 'revisionary') . '</a>', "admin.php?page=rvy-revisions&amp;revision=$revision_id&amp;action=view" );
+			$msg .= '<br /><br /></li><li>';
+			
+			if ( $future_date ) {
+				$msg .= sprintf( '<a href="%s">' . __('Go back to Submit Another revision (possibly for a different publish date).', 'revisionary') . '</a>', "javascript:back();" );
 				$msg .= '<br /><br /></li><li>';
-				
-				if ( $future_date ) {
-					$msg .= sprintf( '<a href="%s">' . __('Go back to Submit Another revision (possibly for a different publish date).', 'revisionary') . '</a>', "javascript:back();" );
-					$msg .= '<br /><br /></li><li>';
-				}
-				$msg .= sprintf( '<a href="%s">' . $manage_link->caption . '</a>', admin_url($manage_link->uri) );
-				$msg .= '</li></ul>';
-
-			} else {
-				$msg = __('Sorry, an error occurred while attempting to save your modification for editorial review!', 'revisionary') . ' ';	
 			}
+			$msg .= sprintf( '<a href="%s">' . $manage_link->caption . '</a>', admin_url($manage_link->uri) );
+			$msg .= '</li></ul>';
+
+		} else {
+			$msg = __('Sorry, an error occurred while attempting to save your modification for editorial review!', 'revisionary') . ' ';	
+		}
+		
+		
+		$admin_notify = rvy_get_option( 'pending_rev_notify_admin' );
+		$author_notify = rvy_get_option( 'pending_rev_notify_author' );
+		if ( ( $admin_notify || $author_notify ) && $revision_id ) {
+			$type_obj = get_post_type_object( $object_type );
+			$type_caption = $type_obj->labels->singular_name;
+			$post_arr['post_type'] = $published_post->post_type;
 			
-			$admin_notify = rvy_get_option( 'pending_rev_notify_admin' );
-			$author_notify = rvy_get_option( 'pending_rev_notify_author' );
-			if ( ( $admin_notify || $author_notify ) && $revision_id ) {
-				$type_obj = get_post_type_object( $object_type );
-				$type_caption = $type_obj->labels->singular_name;
-				$post_arr['post_type'] = $published_post->post_type;
-				
-				$blogname = wp_specialchars_decode( get_option('blogname'), ENT_QUOTES );
+			$blogname = wp_specialchars_decode( get_option('blogname'), ENT_QUOTES );
+			
+			if ( $admin_notify ) {
 				$title = sprintf( __('[%s] Pending Revision Notification', 'revisionary'), $blogname );
 				
 				$message = sprintf( __('A pending revision to the %1$s "%2$s" has been submitted.', 'revisionary'), $type_caption, $post_arr['post_title'] ) . "\r\n\r\n";
 				
+
 				if ( $author = new WP_User( $post_arr['post_author'] ) )
 					$message .= sprintf( __('It was submitted by %1$s.', 'revisionary' ), $author->display_name ) . "\r\n\r\n";
 
 				if ( $revision_id )
 					$message .= __( 'Review it here: ', 'revisionary' ) . admin_url("admin.php?page=rvy-revisions&action=view&revision={$revision_id}") . "\r\n";
 				
-				
 				// establish the publisher recipients
-				if ( $admin_notify ) {
-					$monitor_ids = array();
-					
-					if ( defined( 'RVY_CONTENT_ROLES' ) && ! defined( 'SCOPER_DEFAULT_MONITOR_GROUPS' ) && ! defined( 'PP_DEFAULT_MONITOR_GROUPS' ) ) {
-						$monitor_groups_enabled = true;
-						if ( $monitor_ids = $GLOBALS['revisionary']->content_roles->get_metagroup_members( 'Pending Revision Monitors' ) ) {
-							if ( $type_obj ) {
-								$GLOBALS['revisionary']->skip_revision_allowance = true;
-								$post_publisher_ids = $GLOBALS['revisionary']->content_roles->users_who_can( $type_obj->cap->edit_post, $this->impose_pending_rev, array( 'cols' => 'id', 'user_ids' => $monitor_ids ) );
-								$GLOBALS['revisionary']->skip_revision_allowance = false;
-								$monitor_ids = array_intersect( $monitor_ids, $post_publisher_ids );
-							}
-						}
-					} 
-					
-					if ( ! $monitor_ids && ( empty($monitor_groups_enabled) || ! defined('RVY_FORCE_MONITOR_GROUPS') ) ) {  // if RS/PP are not active, monitor groups have been disabled or no monitor group members can publish this post...
-						require_once(ABSPATH . 'wp-admin/includes/user.php');
-						
-						if ( defined( 'SCOPER_MONITOR_ROLES' ) )
-							$use_wp_roles = SCOPER_MONITOR_ROLES;
-						else
-							$use_wp_roles = ( defined( 'RVY_MONITOR_ROLES' ) ) ? RVY_MONITOR_ROLES : 'administrator,editor';
-						
-						$use_wp_roles = str_replace( ' ', '', $use_wp_roles );
-						$use_wp_roles = explode( ',', $use_wp_roles );
-
-						foreach ( $use_wp_roles as $role_name ) {
-							if ( awp_ver( '3.1-beta' ) ) {
-								$search = new WP_User_Query( "search=&fields=id&role=$role_name" );
-								$monitor_ids = array_merge( $monitor_ids, $search->results );
-							} else {
-								$search = new WP_User_Search( '', 0, $role_name );
-								$monitor_ids = array_merge( $monitor_ids, $search->results );
-							}
-						}
-						
-						if ( $monitor_ids && $type_obj ) {
-							foreach( $monitor_ids as $key => $user_id ) {
-								$_user = new WP_User($user_id);
-								$reqd_caps = map_meta_cap( $type_obj->cap->edit_post, $user_id, $published_post->ID );
-								
-								if ( array_diff( $reqd_caps, array_keys( array_intersect( $_user->allcaps, array( true, 1, '1' ) ) ) ) ) {
-									unset( $monitor_ids[$key] );
-								}
-							}
-						}
-					}
-					
-					if ( 'always' != $admin_notify ) {
-						// intersect default recipients with selected recipients						
-						$selected_recipients = ( ! empty($post_arr['prev_cc_user']) ) ? $post_arr['prev_cc_user'] : array();
-						$monitor_ids = array_intersect( $selected_recipients, $monitor_ids );
-					}
-				} else
-					$monitor_ids = array();
+				$recipient_ids = array();
 				
+				if ( defined('RVY_CONTENT_ROLES') && ! defined('SCOPER_DEFAULT_MONITOR_GROUPS') ) {
+					global $revisionary;
+					
+					$monitor_groups_enabled = true;
+					$revisionary->content_roles->ensure_init();
+					
+					$recipient_ids = $revisionary->content_roles->get_metagroup_members( 'Pending Revision Monitors' );
+					
+					if ( $type_obj ) {
+						$revisionary->skip_revision_allowance = true;
+						$post_publisher_ids = $revisionary->content_roles->users_who_can( $type_obj->cap->edit_post, $this->impose_pending_rev, array( 'cols' => 'id', 'user_ids' => $recipient_ids ) );
+						$revisionary->skip_revision_allowance = false;
+						$recipient_ids = array_intersect( $recipient_ids, $post_publisher_ids );
+					}
+				}
 
-				if ( $author_notify ) {
-					if ( $post = get_post( $this->impose_pending_rev ) ) {
-						if ( ( 'always' == $author_notify ) || ( isset($post_arr['prev_cc_user']) && is_array($post_arr['prev_cc_user']) && in_array( $post->post_author, $post_arr['prev_cc_user'] ) ) )
-							$monitor_ids []= $post->post_author;	
+				if ( ! $recipient_ids && ( empty($monitor_groups_enabled) || ! defined('RVY_FORCE_MONITOR_GROUPS') ) ) {
+					require_once(ABSPATH . 'wp-admin/includes/user.php');
+					
+					if ( defined( 'SCOPER_MONITOR_ROLES' ) )
+						$use_wp_roles = SCOPER_MONITOR_ROLES;
+					else
+						$use_wp_roles = ( defined( 'RVY_MONITOR_ROLES' ) ) ? RVY_MONITOR_ROLES : 'administrator,editor';
+					
+					$use_wp_roles = str_replace( ' ', '', $use_wp_roles );
+					$use_wp_roles = explode( ',', $use_wp_roles );
+					
+					foreach ( $use_wp_roles as $role_name ) {
+						if ( awp_ver( '3.1-beta' ) ) {
+							$search = new WP_User_Query( "search=&fields=id&role=$role_name" );
+							$recipient_ids = array_merge( $recipient_ids, $search->results );
+						} else {
+							$search = new WP_User_Search( '', 0, $role_name );
+							$recipient_ids = array_merge( $recipient_ids, $search->results );
+						}
+					}
+					
+					if ( $recipient_ids && $type_obj ) {
+						foreach( $recipient_ids as $key => $user_id ) {
+							$_user = new WP_User($user_id);
+							$reqd_caps = map_meta_cap( $type_obj->cap->edit_post, $user_id, $published_post->ID );
+							
+							if ( array_diff( $reqd_caps, array_keys( array_intersect( $_user->allcaps, array( true, 1, '1' ) ) ) ) ) {
+								unset( $recipient_ids[$key] );
+							}
+						}
 					}
 				}
 				
-				if ( $monitor_ids ) {
-					global $wpdb;
-					$to_addresses = array_unique( $wpdb->get_col( "SELECT user_email FROM $wpdb->users WHERE ID IN ('" . implode( "','", $monitor_ids ) . "')" ) );
-				} else
-					$to_addresses = array();
-
-
-				if ( $to_addresses ) {
-					foreach ( $to_addresses as $address )
-						rvy_mail($address, $title, $message);
+				if ( 'always' != $admin_notify ) {
+					// intersect default recipients with selected recipients
+					$selected_recipients = ( ! empty($post_arr['prev_cc_user']) ) ? $post_arr['prev_cc_user'] : array();
+					$recipient_ids = array_intersect( $selected_recipients, $recipient_ids );
+				}
+				
+				if ( defined( 'RVY_NOTIFY_SUPER_ADMIN' ) && is_multisite() ) {
+					$super_admin_logins = get_super_admins();
+					foreach( $super_admin_logins as $user_login ) {
+						if ( $super = new WP_User($user_login) )
+							$recipient_ids []= $super->ID;
+					}
 				}
 			}
+
+			if ( $author_notify ) {
+				if ( $post = get_post( $this->impose_pending_rev ) ) {
+
+
+
+					if ( ( 'always' == $author_notify ) || ( isset($post_arr['prev_cc_user']) && is_array($post_arr['prev_cc_user']) && in_array( $post->post_author, $post_arr['prev_cc_user'] ) ) )
+						$recipient_ids []= $post->post_author;	
+				}
+			}
+
+			if ( $recipient_ids ) {
+				global $wpdb;
+				$to_addresses = array_unique( $wpdb->get_col( "SELECT user_email FROM $wpdb->users WHERE ID IN ('" . implode( "','", $recipient_ids ) . "')" ) );
+			} else
+				$to_addresses = array();
 			
-			unset($this->impose_pending_rev);
-			
-			wp_die( $msg, __('Pending Revision Created', 'revisionary'), array( 'response' => 0 ) );
+			foreach ( $to_addresses as $address )
+				rvy_mail($address, $title, $message);
 		}
+		
+		unset($this->impose_pending_rev);
+		
+		wp_die( $msg, __('Pending Revision Created', 'revisionary'), array( 'response' => 0 ) );
 	}
 	
 	
@@ -881,6 +845,51 @@ jQuery(document).ready( function($) {
 		}
 		
 		return $arr;
+	}
+	
+	// If Scheduled Revisions are enabled, don't allow WP to force current post status to future based on publish date
+	function flt_insert_post_data( $data, $postarr ) {
+		if ( ( 'future' == $data['post_status'] ) && ( 'publish' == $postarr['post_status'] ) ) {
+			// don't interfere with scheduling of unpublished drafts
+			if ( in_array( $_POST['original_post_status'], array( 'publish', 'private' ) )  || in_array( $_POST['hidden_post_status'], array( 'publish', 'private' ) ) )
+				$data['post_status'] = 'publish';
+		}
+		
+		return $data;
+	}
+	
+	function flt_pendingrev_post_status($status) {
+		if ( empty( $_POST['post_ID'] ) )
+			return $status;
+
+		// Make sure the stored post is published / scheduled		
+		// With Events Manager plugin active, Role Scoper 1.3 to 1.3.12 caused this filter to fire prematurely as part of object_id detection, flagging for pending_rev needlessly on update of an unpublished post
+		if ( $stored_post = get_post( $_POST['post_ID'] ) )
+			$status_obj = get_post_status_object( $stored_post->post_status );
+
+		if ( empty($status_obj) || ( ! $status_obj->public && ! $status_obj->private && ( 'future' != $stored_post->post_status ) ) )
+			return $status;
+		
+		if ( ! empty( $_POST['rvy_save_as_pending_rev'] ) && ! empty($_POST['post_ID']) ) {
+			$this->impose_pending_rev = $_POST['post_ID'];
+		}
+		
+		if ( is_content_administrator_rvy() )
+			return $status;
+		
+		if ( isset($_POST['wp-preview']) && ( 'dopreview' == $_POST['wp-preview'] ) )
+			return $status;
+			
+		if ( isset($_POST['post_ID']) && isset($_POST['post_type']) ) {
+			$post_id = $_POST['post_ID'];
+
+			if ( $type_obj = get_post_type_object( $_POST['post_type'] ) ) {
+				if ( ! agp_user_can( $type_obj->cap->edit_post, $post_id, '', array( 'skip_revision_allowance' => true ) ) )
+					$this->impose_pending_rev = $post_id;
+			}
+		}
+		
+		return $status;
 	}
 } // end class RevisionaryAdmin
 ?>

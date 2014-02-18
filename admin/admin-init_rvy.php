@@ -49,7 +49,7 @@ function rvy_admin_init() {
 				add_action( 'wp_loaded', 'rvy_revision_unschedule' );
 				
 			} elseif ( ! empty( $_POST['rvy_revision_edit'] ) ) {
-				require_once( dirname(__FILE__).'/revision-action_rvy.php');	
+				require_once( dirname(__FILE__).'/revision-action_rvy.php');
 				add_action( 'wp_loaded', 'rvy_revision_edit' );
 			
 			} elseif ( ! empty($_POST['action']) && ('bulk-delete' == $_POST['action'] ) ) {

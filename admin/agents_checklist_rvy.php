@@ -7,7 +7,7 @@ if( basename(__FILE__) == basename($_SERVER['SCRIPT_FILENAME']) )
  * agents_checklist_rvy.php
  * 
  * @author 		Kevin Behrens
- * @copyright 	Copyright 2009-2011
+ * @copyright 	Copyright 2009-2013
  * 
  */
  
@@ -16,18 +16,18 @@ define ('ELIGIBLE_ITEMS_RVY', 'eligible');
  
  // TODO: scale this down more, as it's overkill for Revisionary's usage
  class RevisionaryAgentsChecklist {
-	function all_agents_checklist( $role_bases, $agents, $args, $class = 'rs-agents' ) {
+	public static function all_agents_checklist( $role_bases, $agents, $args, $class = 'rs-agents' ) {
 		$div_style = "class='$class rvy-agents-checklist'";
 		
 		foreach ( $role_bases as $role_basis ) {
 			echo "<div $div_style>";
-			RevisionaryAgentsChecklist::agents_checklist($role_basis, $agents[$role_basis], $role_basis, array(), $args);
+			self::agents_checklist($role_basis, $agents[$role_basis], $role_basis, array(), $args);
 			
 			echo "</div>";
 		}
 	}
 	
-	function agents_checklist( $role_basis, $all_agents, $id_prefix = '', $stored_assignments = '', $args = '') {
+	public static function agents_checklist( $role_basis, $all_agents, $id_prefix = '', $stored_assignments = '', $args = '') {
 		if ( empty($all_agents) )
 			return;
 
@@ -35,9 +35,9 @@ define ('ELIGIBLE_ITEMS_RVY', 'eligible');
 		
 		// list current selections on top first
 		if ( $stored_assignments )
-			RevisionaryAgentsChecklist::_agents_checklist_display( CURRENT_ITEMS_RVY, $role_basis, $all_agents, $id_prefix, $stored_assignments, $args, $key); 
+			self::_agents_checklist_display( CURRENT_ITEMS_RVY, $role_basis, $all_agents, $id_prefix, $stored_assignments, $args, $key); 
 		
-		RevisionaryAgentsChecklist::_agents_checklist_display( ELIGIBLE_ITEMS_RVY, $role_basis, $all_agents, $id_prefix, $stored_assignments, $args, $key); 
+		self::_agents_checklist_display( ELIGIBLE_ITEMS_RVY, $role_basis, $all_agents, $id_prefix, $stored_assignments, $args, $key); 
 
 		echo '<div id="rvy-agents-checklist-spacer">&nbsp;</div>';
 
@@ -47,7 +47,7 @@ define ('ELIGIBLE_ITEMS_RVY', 'eligible');
 		}
 	}
 	
-	function eligible_agents_input_box( $role_basis, $id_prefix, $propagation ) {
+	public static function eligible_agents_input_box( $role_basis, $id_prefix, $propagation ) {
 		$id = "{$id_prefix}_csv";
 		$msg = __( "Enter additional User Names or IDs (comma-separate)", 'revisionary');
 		echo '<br /><div class="rs-agents_caption"><strong>' . $msg . ':</strong></div>';
@@ -55,7 +55,7 @@ define ('ELIGIBLE_ITEMS_RVY', 'eligible');
 	}
 	
 	// stored_assignments[agent_id][inherited_from] = progenitor_assignment_id (note: this function treats progenitor_assignment_id as a boolean)
-	function _agents_checklist_display( $agents_subset, $role_basis, $all_agents, $id_prefix, $stored_assignments, $args, &$key) {
+	static function _agents_checklist_display( $agents_subset, $role_basis, $all_agents, $id_prefix, $stored_assignments, $args, &$key) {
 		$defaults = array( 
 		'eligible_ids' => '', 			'locked_ids' => '',
 		'suppress_extra_prefix' => false, 					 				'check_for_incomplete_submission' => false,
@@ -266,7 +266,7 @@ define ('ELIGIBLE_ITEMS_RVY', 'eligible');
 			$caption = $agent_display_name;
 			
 			if ( strlen($caption) > $caption_length_limit ) {
-				if ( $rtl )
+				if ( ! empty($rtl) )
 					$caption = '...' . substr( $caption, strlen($caption) - $caption_length_limit); 
 				else
 					$caption = substr($caption, 0, $caption_length_limit) . '...';

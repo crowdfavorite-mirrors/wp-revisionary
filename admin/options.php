@@ -417,7 +417,7 @@ if ( $ui->display_hints ) {
 echo '<ul>';
 $all_movable_options = array();
 
-$option_scope_stamp = __( 'sitewide control of "%s"', 'revisionary' );
+$option_scope_stamp = __( 'network-wide control of "%s"', 'revisionary' );
 
 foreach ( $available_form_options as $tab_name => $sections ) {
 	echo '<li>';

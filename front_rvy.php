@@ -46,10 +46,15 @@ class RevisionaryFront {
 	}
 
 	function act_template_redirect() {
-		if ( ! isset($_GET['p']) )
-			return;
+		if ( ! empty($_GET['p']) )
+			$id = $_GET['p'];
+		else {
+			global $wp_query;
+			if ( ! empty($wp_query->queried_object_id) )
+				$id = $wp_query->queried_object_id;
+		}
 	
-		if ( $revision = get_post( $_GET['p'] ) )
+		if ( $revision = get_post( $id ) )
 			if ( $parent = get_post( $revision->post_parent ) )
 				if ( ( 'page' == $parent->post_type ) && ( $parent->post_name == $revision->post_name ) ) {
 					global $wp_query;
@@ -64,25 +69,37 @@ class RevisionaryFront {
 	
 	function flt_revision_post_template( $single_template, $id = 0 ) {
 		if ( ! $id ) {
-			if ( $revision = get_post( $_GET['p'] ) )
-				if ( $parent = get_post( $revision->post_parent ) )
-					$id = $revision->post_parent;
+			if ( ! empty($_GET['p']) )
+				$id = $_GET['p'];
+			else {
+				global $wp_query;
+				if ( ! empty($wp_query->queried_object_id) )
+					$id = $wp_query->queried_object_id;
+			}
 		}
 		
 		if ( $id ) {
+			$revision = get_post( $id );
+
 			// support custom_post_template entry (as set by Custom Post Templates plugin)
 			if ( ! $template_file = (string) get_post_meta($id, '_custom_post_template', true) )
 				$template_file = (string) get_post_meta($id, 'custom_post_template', true);	// Custom Post Templates 0.92 uses this string, which leaves entry visible in Custom Fields UI
 
+			if ( ! $template_file ) {
+				if ( $revision ) {
+					if ( ! $template_file = (string) get_post_meta($revision->post_parent, '_custom_post_template', true) )
+						$template_file = (string) get_post_meta($revision->post_parent, 'custom_post_template', true);	
+				}
+			}
+			
 			if ( $template_file ) {
 				$custom_template = TEMPLATEPATH . "/" . $template_file;
 
 				if ( file_exists( $custom_template ) ) 
 					return $custom_template;
 			} 
-			else {
-				if ( empty($parent) )
-					$parent = get_post( $id );
+			elseif ( $revision ) {
+				$parent = get_post( $revision->post_parent );
 
 				if ( $parent && ( 'post' != $parent->post_type ) ) {
 					$templates = array( 'single-' . $parent->post_type . '.php', 'single.php' );
@@ -96,15 +113,23 @@ class RevisionaryFront {
 	
 	function flt_revision_page_template( $page_template, $id = 0 ) {
 		if ( ! $id ) {
-			if ( $revision = get_post( $_GET['p'] ) )
-				if ( $parent = get_post( $revision->post_parent ) )
-					$id = $revision->post_parent;
+			if ( ! empty($_GET['p']) )
+				$id = $_GET['p'];
+			else {
+				global $wp_query;
+				if ( ! empty($wp_query->queried_object_id) )
+					$id = $wp_query->queried_object_id;
+			}
 		}
 		
 		if ( $id ) {
-			// this code ported from wp-includes/theme/get_page_template() :
-			$template = get_post_meta($id, '_wp_page_template', true);
+			if ( ! $template = rvy_get_post_meta($id, '_wp_page_template', true) ) {
+				if ( $revision = get_post( $id ) ) {
+					$template = rvy_get_post_meta($revision->post_parent, '_wp_page_template', true);
+				}
+			}
 
+			// this code ported from wp-includes/theme/get_page_template() :
 			if ( 'default' == $template )
 				$template = '';
 

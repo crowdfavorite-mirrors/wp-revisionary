@@ -34,7 +34,7 @@ class Revisionary
 			add_filter( 'map_meta_cap', array( &$this, 'flt_limit_others_drafts' ), 10, 4 );
 			//add_filter( 'posts_where', array( &$this, 'flt_posts_where' ), 1 );
 		}
-
+		
 		if ( is_admin() ) {
 			require_once( dirname(__FILE__).'/admin/admin_rvy.php');
 			$this->admin = new RevisionaryAdmin();
@@ -46,7 +46,7 @@ class Revisionary
 		add_filter( 'the_posts', array( &$this, 'undo_inherit_status_workaround' ) );
 	
 		add_action( 'wp_loaded', array( &$this, 'set_revision_capdefs' ) );
-
+		
 		do_action( 'rvy_init' );
 	}
 	
@@ -148,8 +148,8 @@ class Revisionary
 			return $wp_blogcaps;
 
 		$script_name = $_SERVER['SCRIPT_NAME'];
-			
-		if ( defined( 'PP_VERSION' ) && strpos( $script_name, 'p-admin/post.php' ) ) {
+		
+		if ( ( defined( 'PP_VERSION' ) || defined( 'PPC_VERSION' ) ) && strpos( $script_name, 'p-admin/post.php' ) ) {
 			$support_publish_cap = empty( $_REQUEST['publish'] ) && ! is_array($args[0]) && ( false !== strpos( $args[0], 'publish_' ) );  // TODO: support custom publish cap prefix without perf hit?
 		}
 		
@@ -190,7 +190,7 @@ class Revisionary
 			if ( $post )
 				$object_type = get_post_field( 'post_type', $post->post_parent );
 		}
-
+		
 		$object_type_obj = get_post_type_object( $object_type );
 		
 		if ( empty( $object_type_obj->cap ) )
@@ -219,9 +219,10 @@ class Revisionary
 
 				if ( is_preview() || strpos($script_name, 'p-admin/edit.php') || strpos($script_name, 'p-admin/widgets.php') || ( in_array( get_post_field('post_status', $post_id ), array('publish', 'private') ) ) ) {
 					if ( $type_obj = get_post_type_object( $object_type ) ) {
-						if ( ! empty( $wp_blogcaps[ $type_obj->cap->edit_posts ] ) )
+						if ( ! empty( $wp_blogcaps[ $type_obj->cap->edit_posts ] ) ) {
 							foreach ( $replace_caps as $replace_cap_name )
 								$wp_blogcaps[$replace_cap_name] = true;
+						}
 					}
 				}
 			}
@@ -242,32 +243,6 @@ class Revisionary
 		// TODO: possible need to redirect revision cap check to published parent post/page ( RS cap-interceptor "maybe_revision" )
 		return $wp_blogcaps;			
 	}
-	
-	/*
-	function flt_posts_where( $where ) {
-		if ( ( is_preview() || is_admin() ) && ! is_content_administrator_rvy() ) {
-			global $current_user;
-			
-			if ( ! $this->skip_revision_allowance ) {
-				if ( $pos = strpos( $where, "wp_trunk_posts.post_author = $current_user->id AND" ) ) {  
-					$object_type = awp_post_type_from_uri();
-					
-					if ( $type_obj = get_post_type_object( $object_type ) ) {
-						if ( current_user_can( $type_obj->cap->edit_others_posts ) ) {
-							global $wpdb;
-							
-							$where = str_replace( "$wpdb->posts.post_author = $current_user->id AND", '', $where );	// current syntax as of WP 2.8.4
-							$where = str_replace( "$wpdb->posts.post_author = '$current_user->id' AND", '', $where );
-						}
-					}
-				}
-			}
-		}
-			
-		return $where;
-	}
-	*/
-	
 	
 } // end Revisionary class
 ?>

@@ -65,8 +65,8 @@ class Revisionary_Submittee {
 		
 		$options_sitewide = isset($_POST['rvy_options_sitewide']) ? (array) $_POST['rvy_options_sitewide'] : array();
 
-		add_site_option( "rvy_options_sitewide_reviewed", $reviewed_options );
-		add_site_option( "rvy_options_sitewide", $options_sitewide );
+		update_site_option( "rvy_options_sitewide_reviewed", $reviewed_options );
+		update_site_option( "rvy_options_sitewide", $options_sitewide );
 	}
 	
 	function default_sitewide() {
@@ -80,7 +80,7 @@ class Revisionary_Submittee {
 		$default_prefix = ( $customize_defaults ) ? 'default_' : '';
 		
 		$reviewed_options = explode(',', $_POST['all_options']);
-		
+
 		foreach ( $reviewed_options as $option_basename ) {
 			$value = isset($_POST[$option_basename]) ? $_POST[$option_basename] : '';
 

@@ -3,7 +3,7 @@
 Plugin Name: Revisionary
 Plugin URI: http://agapetry.net/
 Description: Enables qualified users to submit changes to currently published posts or pages.  These changes, if approved by an Editor, can be published immediately or scheduled for future publication.
-Version: 1.1.11
+Version: 1.1.12
 Author: Kevin Behrens
 Author URI: http://agapetry.net/
 Min WP Version: 3.0
@@ -34,15 +34,19 @@ if ( strpos( $_SERVER['SCRIPT_NAME'], 'p-admin/index-extra.php' ) || strpos( $_S
 	return;
 
 if ( defined( 'RVY_VERSION' ) ) {
-	// don't allow two copies of RV to run simultaneously
+	// don't allow two copies to run simultaneously
 	if ( is_admin() && strpos( $_SERVER['SCRIPT_NAME'], 'p-admin/plugins.php' ) && ! strpos( urldecode($_SERVER['REQUEST_URI']), 'deactivate' ) ) {
-		$message = sprintf( __( 'Another copy of Revisionary is already activated (version %1$s in "%2$s")', 'rv' ), RVY_VERSION, RVY_FOLDER );
+		if ( defined( 'RVY_FOLDER' ) )
+			$message = sprintf( __( 'Another copy of Revisionary is already activated (version %1$s in "%2$s")', 'rvy' ), RVY_VERSION, RVY_FOLDER );
+		else
+			$message = sprintf( __( 'Another copy of Revisionary is already activated (version %1$s)', 'rvy' ), RVY_VERSION );
+		
 		die($message);
 	}
 	return;
 }
 
-define ('RVY_VERSION', '1.1.11');
+define ('RVY_VERSION', '1.1.12');
 
 define ('COLS_ALL_RVY', 0);
 define ('COL_ID_RVY', 1);

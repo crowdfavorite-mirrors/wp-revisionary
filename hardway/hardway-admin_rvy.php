@@ -35,12 +35,12 @@ if ( ! is_content_administrator_rvy() ) {
  * hardway-admin_rvy.php
  * 
  * @author 		Kevin Behrens
- * @copyright 	Copyright 2009-2011
+ * @copyright 	Copyright 2009-2013
  *
  */
 class RevisionaryAdminHardway {
 	
-	function flt_include_pending_revisions($query) {
+	public static function flt_include_pending_revisions($query) {
 		global $wpdb;
 		
 		if ( strpos( $query, 'num_comments' ) )

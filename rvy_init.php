@@ -247,7 +247,8 @@ function rvy_update_option( $option_basename, $option_val, $sitewide = -1 ) {
 		
 	if ( $sitewide ) {
 		//d_echo("<br />sitewide: $option_basename, value '$option_val'" );
-		add_site_option( "rvy_$option_basename", $option_val );
+		//add_site_option( "rvy_$option_basename", $option_val );
+		update_site_option( "rvy_$option_basename", $option_val );
 	} else { 
 		//d_echo("<br />blogwide: $option_basename" );
 		update_option( "rvy_$option_basename", $option_val );

@@ -1,10 +1,10 @@
 === Plugin Name ===
 Contributors: kevinB
-Donate link: http://agapetry.net/news/introducing-role-scoper/#role-scoper-download
+Donate Link: https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=JWZVFUDLLYQBA
 Tags: revision, access, permissions, cms, user, groups, members, admin, pages, posts, page, Post
 Requires at least: 3.0
-Tested up to: 3.6
-Stable Tag: 1.1.11
+Tested up to: 3.8
+Stable Tag: 1.1.12
 
 Moderated editing of published content.  Following approval by an editor, the revision can be published immediately or scheduled.
 
@@ -51,6 +51,25 @@ Revisionary can be installed automatically via the Plugins tab in your blog admi
 
 
 == Changelog ==
+
+= 1.1.12 - 23 Dec 2013 =
+* WP 3.8 - Fixed Revisionary > Settings styling
+* Fixed : Email notifications were not sent on Pending Revision submission under some configurations
+* Fixed : Email notifications were not sent upon Scheduled Revision publishing unless Press Permit / Role Scoper active and Scheduled Revision Monitors group populated
+* Change : On network installations, email notifications to administrators will include super admins if constant RVY_NOTIFY_SUPER_ADMIN is defined
+* Fixed : Network-wide Revisionary Options could not be modified
+* Fixed : Revisions on Edit Posts screen were displayed with stored post title, ignoring modifications by previous filters (such as translations)
+* Fixed : Administrator did not have "save as pending revision" option when post is currently scheduled for publishing
+* Fixed : Revision Diff formatting (column alignment)
+* Fixed : Revision preview from Revisions Manager screen not displayed correctly under some configurations
+* Change : Revisions Manager screen marks a revision as "Current" only if it is published
+* Change : Better consistency with standard Revisions Manager behavior: post-assigned Revisor role is sufficient to edit others' revisions, but post-assigned Contributor role is not
+* Change : Better consistency with standard Revisions Manager behavior: prevent diff display of unreadable revisions
+* Change : When comparing revisions, if only one of the revisions is past, force it to left
+* Change : On Revisions Manager screen, add margins to Update Revision button
+* Fixed : PHP Notices for non-static function calls
+* Compat : Role Scoper - when Pending Revision Monitors group is used and notification is "by default", recipient checkboxes missing on Edit Post form and TinyMCE broken
+* Compat : Duplicate Right Now links on dashboard if Role Scoper or Press Permit active
 
 **1.1.11 - 18 Aug 2013**
 
